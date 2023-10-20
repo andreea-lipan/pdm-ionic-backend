@@ -30,21 +30,23 @@ app.use(async (ctx, next) => {
     }
 });
 
-class Item {
-    constructor({ id, text, date, version }) {
+class Beehive {
+    constructor({ id, index, dateCreated, autumnTreatment, managerName }) {
         this.id = id;
-        this.text = text;
-        this.date = date;
-        this.version = version;
+        this.index = index;
+        this.dateCreated = dateCreated;
+        this.autumnTreatment = autumnTreatment;
+        this.managerName = managerName;
     }
 }
 
-const items = [];
+const beehives = [];
 for (let i = 0; i < 3; i++) {
-    items.push(new Item({ id: `${i}`, text: `item ${i}`, date: new Date(Date.now() + i), version: 1 }));
+    beehives.push(new Beehive({
+        id: `${i}`, index: `${i}`, dateCreated: new Date(Date.now() + i), autumnTreatment: false, managerName: "Alan" }));
 }
-let lastUpdated = items[items.length - 1].date;
-let lastId = items[items.length - 1].id;
+let lastUpdated = beehives[beehives.length - 1].date;
+let lastId = beehives[beehives.length - 1].id;
 const pageSize = 10;
 
 const broadcast = data =>
@@ -56,98 +58,98 @@ const broadcast = data =>
 
 const router = new Router();
 
-router.get('/item', ctx => {
-    ctx.response.body = items;
+router.get('/beehives', ctx => {
+    ctx.response.body = beehives;
     ctx.response.status = 200;
 });
 
-router.get('/item/:id', async (ctx) => {
-    const itemId = ctx.request.params.id;
-    const item = items.find(item => itemId === item.id);
-    if (item) {
-        ctx.response.body = item;
+router.get('/beehives/:id', async (ctx) => {
+    const beehiveId = ctx.request.params.id;
+    const beehive = beehives.find(beehive => beehiveId === beehive.id);
+    if (beehive) {
+        ctx.response.body = beehive;
         ctx.response.status = 200; // ok
     } else {
-        ctx.response.body = { message: `item with id ${itemId} not found` };
-        ctx.response.status = 404; // NOT FOUND (if you know the resource was deleted, then return 410 GONE)
+        ctx.response.body = { message: `beehive with id ${beehiveId} not found` };
+        ctx.response.status = 404; // NOT FOUND
     }
 });
 
-const createItem = async (ctx) => {
-    const item = ctx.request.body;
-    if (!item.text) { // validation
-        ctx.response.body = { message: 'Text is missing' };
+const createBeehive = async (ctx) => {
+    const beehive = ctx.request.body;
+    if (!beehive.managerName) { // validation
+        ctx.response.body = { message: 'Manager\'s name is missing' };
         ctx.response.status = 400; //  BAD REQUEST
         return;
     }
-    item.id = `${parseInt(lastId) + 1}`;
-    lastId = item.id;
-    item.date = new Date();
-    item.version = 1;
-    items.push(item);
-    ctx.response.body = item;
+    beehive.id = `${parseInt(lastId) + 1}`;
+    lastId = beehive.id;
+    beehive.date = new Date();
+    beehive.version = 1;
+    beehives.push(beehive);
+    ctx.response.body = beehive;
     ctx.response.status = 201; // CREATED
-    broadcast({ event: 'created', payload: { item } });
+    broadcast({ event: 'created', payload: { beehive } });
 };
 
-router.post('/item', async (ctx) => {
-    await createItem(ctx);
+router.post('/beehives', async (ctx) => {
+    await createBeehive(ctx);
 });
 
-router.put('/item/:id', async (ctx) => {
+router.put('/beehives/:id', async (ctx) => {
     const id = ctx.params.id;
-    const item = ctx.request.body;
-    item.date = new Date();
-    const itemId = item.id;
-    if (itemId && id !== item.id) {
+    const beehive = ctx.request.body;
+    beehive.date = new Date();
+    const beehiveId = beehive.id;
+    if (beehiveId && id !== beehive.id) {
         ctx.response.body = { message: `Param id and body id should be the same` };
         ctx.response.status = 400; // BAD REQUEST
         return;
     }
-    if (!itemId) {
-        await createItem(ctx);
+    if (!beehiveId) {
+        await createBeehive(ctx);
         return;
     }
-    const index = items.findIndex(item => item.id === id);
+    const index = beehives.findIndex(beehive => beehive.id === id);
     if (index === -1) {
-        ctx.response.body = { issue: [{ error: `item with id ${id} not found` }] };
+        ctx.response.body = { issue: [{ error: `beehive with id ${id} not found` }] };
         ctx.response.status = 400; // BAD REQUEST
         return;
     }
-    const itemVersion = parseInt(ctx.request.get('ETag')) || item.version;
-    if (itemVersion < items[index].version) {
+    const beehiveVersion = parseInt(ctx.request.get('ETag')) || beehive.version;
+    if (beehiveVersion < beehives[index].version) {
         ctx.response.body = { issue: [{ error: `Version conflict` }] };
         ctx.response.status = 409; // CONFLICT
         return;
     }
-    item.version++;
-    items[index] = item;
+    beehive.version++;
+    beehives[index] = beehive;
     lastUpdated = new Date();
-    ctx.response.body = item;
+    ctx.response.body = beehive;
     ctx.response.status = 200; // OK
-    broadcast({ event: 'updated', payload: { item } });
+    broadcast({ event: 'updated', payload: { beehive } });
 });
 
-router.del('/item/:id', ctx => {
-    const id = ctx.params.id;
-    const index = items.findIndex(item => id === item.id);
-    if (index !== -1) {
-        const item = items[index];
-        items.splice(index, 1);
-        lastUpdated = new Date();
-        broadcast({ event: 'deleted', payload: { item } });
-    }
-    ctx.response.status = 204; // no content
-});
-
-setInterval(() => {
-    lastUpdated = new Date();
-    lastId = `${parseInt(lastId) + 1}`;
-    const item = new Item({ id: lastId, text: `item ${lastId}`, date: lastUpdated, version: 1 });
-    items.push(item);
-    console.log(`New item: ${item.text}`);
-    broadcast({ event: 'created', payload: { item } });
-}, 5000);
+// router.del('/beehive/:id', ctx => {
+//     const id = ctx.params.id;
+//     const index = beehives.findIndex(beehive => id === beehive.id);
+//     if (index !== -1) {
+//         const beehive = beehives[index];
+//         beehives.splice(index, 1);
+//         lastUpdated = new Date();
+//         broadcast({ event: 'deleted', payload: { beehive } });
+//     }
+//     ctx.response.status = 204; // no content
+// });
+//
+// setInterval(() => {
+//     lastUpdated = new Date();
+//     lastId = `${parseInt(lastId) + 1}`;
+//     const beehive = new beehive({ id: lastId, text: `beehive ${lastId}`, date: lastUpdated, version: 1 });
+//     beehives.push(beehive);
+//     console.log(`New beehive: ${beehive.text}`);
+//     broadcast({ event: 'created', payload: { beehive } });
+// }, 5000);
 
 app.use(router.routes());
 app.use(router.allowedMethods());
