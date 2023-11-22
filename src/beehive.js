@@ -75,7 +75,7 @@ const createBeehive = async (ctx, beehive, response) => {
         beehive.userId = userId;
         response.body = await beehiveStore.insert(beehive);
         response.status = 201; // created
-        broadcast(userId, {type: 'created', payload: beehive});
+        broadcast(userId, {event: 'created', payload: beehive});
     } catch (err) {
         response.body = {message: err.message};
         response.status = 400; // bad request
@@ -87,6 +87,7 @@ beehiveRouter.post('/', async ctx => {
     await createBeehive(ctx, ctx.request.body, ctx.response)});
 
 beehiveRouter.put('/:id', async ctx => {
+    console.log("PUT")
     const beehive = ctx.request.body;
     const id = ctx.params.id;
     const beehiveId = beehive._id;
@@ -99,13 +100,15 @@ beehiveRouter.put('/:id', async ctx => {
     if (!beehiveId) {
         await createBeehive(ctx, beehive, response);
     } else {
+        console.log("updating..")
         const userId = ctx.state.user._id;
         beehive.userId = userId;
         const updatedCount = await beehiveStore.update({_id: id}, beehive);
         if (updatedCount === 1) {
             response.body = beehive;
             response.status = 200; // ok
-            broadcast(userId, {type: 'updated', payload: beehive});
+            console.log("updated");
+            broadcast(userId, {event: 'updated', payload: beehive});
         } else {
             response.body = {message: 'Resource no longer exists'};
             response.status = 405; // method not allowed
